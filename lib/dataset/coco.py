@@ -88,17 +88,23 @@ class COCODataset(JointsDataset):
         self.num_images = len(self.image_set_index)
         logger.info('=> num_images: {}'.format(self.num_images))
 
-        self.num_joints = 17
+        self.num_joints = 34
         self.flip_pairs = [[1, 2], [3, 4], [5, 6], [7, 8],
-                           [9, 10], [11, 12], [13, 14], [15, 16]]
+                           [11, 12], [13, 14], [18, 19],
+                           [20, 21], [22, 23], [24, 25],
+                           [26, 27], [28, 29], [30, 31],
+                           [32, 33]
+                           ]
         self.parent_ids = None
-        self.upper_body_ids = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-        self.lower_body_ids = (11, 12, 13, 14, 15, 16)
+        self.upper_body_ids = [i for i in range(17)]
+        self.lower_body_ids = [i for i in range(17, 34)]
 
         self.joints_weight = np.array(
             [
                 1., 1., 1., 1., 1., 1., 1., 1.2, 1.2,
-                1.5, 1.5, 1., 1., 1.2, 1.2, 1.5, 1.5
+                1.5, 1.5, 1., 1., 1.2, 1.2, 1.5, 1.5,
+                1, 1, 1, 1., 1., 1., 1., 1.,
+                1, 1, 1, 1., 1., 1., 1., 1.,1
             ],
             dtype=np.float32
         ).reshape((self.num_joints, 1))
@@ -117,7 +123,7 @@ class COCODataset(JointsDataset):
         return os.path.join(
             self.root,
             'annotations',
-            prefix + '_' + self.image_set + '.json'
+             self.image_set + '.json'
         )
 
     def _load_image_set_index(self):
@@ -138,7 +144,8 @@ class COCODataset(JointsDataset):
         """ ground truth bbox and keypoints """
         gt_db = []
         for index in self.image_set_index:
-            gt_db.extend(self._load_coco_keypoint_annotation_kernal(index))
+            if self.coco.getAnnIds(imgIds=index, iscrowd=False) != []:
+                gt_db.extend(self._load_coco_keypoint_annotation_kernal(index))
         return gt_db
 
     def _load_coco_keypoint_annotation_kernal(self, index):
@@ -158,7 +165,9 @@ class COCODataset(JointsDataset):
 
         annIds = self.coco.getAnnIds(imgIds=index, iscrowd=False)
         objs = self.coco.loadAnns(annIds)
-
+        # print('---im_ann---->', im_ann)
+        # print('---annIds---->', annIds)
+        # print('---objs---->', objs)
         # sanitize bboxes
         valid_objs = []
         for obj in objs:
@@ -196,8 +205,11 @@ class COCODataset(JointsDataset):
                 joints_3d_vis[ipt, 2] = 0
 
             center, scale = self._box2cs(obj['clean_bbox'][:4])
+            image_path = os.path.join(self.root, self.image_set, obj['parsing'])
+            image_path = image_path.replace('CIHP_train', 'train_img')
+            image_path = image_path.replace('CIHP_val', 'val_img')
             rec.append({
-                'image': self.image_path_from_index(index),
+                'image': image_path,
                 'center': center,
                 'scale': scale,
                 'joints_3d': joints_3d,
@@ -312,7 +324,7 @@ class COCODataset(JointsDataset):
                 'scale': all_boxes[idx][2:4],
                 'area': all_boxes[idx][4],
                 'score': all_boxes[idx][5],
-                'image': int(img_path[idx][-16:-4])
+                'image': int(idx)
             })
         # image x person x (keypoints)
         kpts = defaultdict(list)
@@ -339,7 +351,6 @@ class COCODataset(JointsDataset):
                     kpt_score = kpt_score / valid_num
                 # rescoring
                 n_p['score'] = kpt_score * box_score
-
             if self.soft_nms:
                 keep = soft_oks_nms(
                     [img_kpts[i] for i in range(len(img_kpts))],

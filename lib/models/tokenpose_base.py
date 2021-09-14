@@ -218,7 +218,6 @@ class TokenPose_S_base(nn.Module):
         return nn.Sequential(*layers)
 
     def _init_weights(self, m):
-        print("Initialization...")
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
@@ -409,7 +408,6 @@ class TokenPose_TB_base(nn.Module):
         return nn.Sequential(*layers)
 
     def _init_weights(self, m):
-        print("Initialization...")
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
@@ -555,7 +553,6 @@ class TokenPose_L_base(nn.Module):
         return nn.Sequential(*layers)
 
     def _init_weights(self, m):
-        print("Initialization...")
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:

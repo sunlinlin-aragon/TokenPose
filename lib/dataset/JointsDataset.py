@@ -21,7 +21,7 @@ from torch.utils.data import Dataset
 from utils.transforms import get_affine_transform
 from utils.transforms import affine_transform
 from utils.transforms import fliplr_joints
-
+from tifffile import tifffile
 
 logger = logging.getLogger(__name__)
 
@@ -124,9 +124,14 @@ class JointsDataset(Dataset):
                 image_file, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
             )
         else:
-            data_numpy = cv2.imread(
-                image_file, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
-            )
+            if image_file.endswith('tif'):
+                data_numpy = tifffile.imread(image_file)
+                data_numpy = np.expand_dims(data_numpy, axis=2)
+                data_numpy = np.concatenate((data_numpy, data_numpy, data_numpy), axis=-1)
+            else:
+                data_numpy = cv2.imread(
+                    image_file, cv2.IMREAD_COLOR | cv2.IMREAD_IGNORE_ORIENTATION
+                )
 
         if self.color_rgb:
             data_numpy = cv2.cvtColor(data_numpy, cv2.COLOR_BGR2RGB)
@@ -164,7 +169,7 @@ class JointsDataset(Dataset):
                 joints, joints_vis = fliplr_joints(
                     joints, joints_vis, data_numpy.shape[1], self.flip_pairs)
                 c[0] = data_numpy.shape[1] - c[0] - 1
-                
+        print(c, s, r, self.image_size)
         joints_heatmap = joints.copy()
         trans = get_affine_transform(c, s, r, self.image_size)
         trans_heatmap = get_affine_transform(c, s, r, self.heatmap_size)

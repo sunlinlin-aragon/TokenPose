@@ -10,9 +10,12 @@ from __future__ import print_function
 
 import os
 import logging
+from random import random
 import time
 from collections import namedtuple
 from pathlib import Path
+
+from matplotlib.pyplot import show
 
 import torch
 import torch.optim as optim
@@ -201,3 +204,14 @@ def get_model_summary(model, *input_tensors, item_length=26, verbose=False):
         details += "{} : {} layers   ".format(layer, layer_instances[layer])
 
     return details
+
+import cv2
+from PIL import Image
+import numpy as np
+import random
+def show_point(img, points, color):
+    for v in points:
+        if v[0] > 0 and v[1] > 0:
+            pos = (int(round(v[0])), int(round(v[1])))
+            cv2.circle(img, pos, 1, color, 1)  # 为肢体点画红色实心圆
+    return img

@@ -12,7 +12,7 @@ import argparse
 import os
 import pprint
 import shutil
-
+os.environ["CUDA_VISIBLE_DEVICES"] = '4'
 import torch
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
@@ -42,8 +42,9 @@ def parse_args():
     # general
     parser.add_argument('--cfg',
                         help='experiment configure file name',
-                        required=True,
-                        type=str)
+                        type=str,
+                        default='/home/workspace/TokenPose/experiments/coco/tokenpose/tokenpose_L_D24_384_288_patch64_dim192_depth24_heads12.yaml',
+                        required=False)
 
     parser.add_argument('opts',
                         help="Modify config options using the command-line",
@@ -54,11 +55,11 @@ def parse_args():
     parser.add_argument('--modelDir',
                         help='model directory',
                         type=str,
-                        default='')
+                        default='./ckpts')
     parser.add_argument('--logDir',
                         help='log directory',
                         type=str,
-                        default='')
+                        default='./logs')
     parser.add_argument('--dataDir',
                         help='data directory',
                         type=str,
@@ -66,7 +67,7 @@ def parse_args():
     parser.add_argument('--prevModelDir',
                         help='prev Model directory',
                         type=str,
-                        default='')
+                        default='./weithts')
 
     args = parser.parse_args()
 
@@ -76,7 +77,9 @@ def parse_args():
 def main():
     args = parse_args()
     update_config(cfg, args)
-
+    print('--cfg-->', cfg)
+    print('---GPUS--->', cfg.GPUS)
+    # import ipdb;ipdb.set_trace()
     logger, final_output_dir, tb_log_dir = create_logger(
         cfg, args.cfg, 'train')
 
@@ -112,7 +115,8 @@ def main():
 
     logger.info(get_model_summary(model, dump_input))
 
-    model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
+    # model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
+    model.cuda()
 
     # define loss function (criterion) and optimizer
     criterion = JointsMSELoss(
@@ -209,7 +213,7 @@ def main():
             'epoch': epoch + 1,
             'model': cfg.MODEL.NAME,
             'state_dict': model.state_dict(),
-            'best_state_dict': model.module.state_dict(),
+            'best_state_dict': model.state_dict(),
             'perf': perf_indicator,
             'optimizer': optimizer.state_dict(),
         }, best_model, final_output_dir)
@@ -220,7 +224,7 @@ def main():
     logger.info('=> saving final model state to {}'.format(
         final_model_state_file)
     )
-    torch.save(model.module.state_dict(), final_model_state_file)
+    torch.save(model.state_dict(), final_model_state_file)
     writer_dict['writer'].close()
 
 

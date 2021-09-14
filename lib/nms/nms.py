@@ -73,8 +73,13 @@ def nms(dets, thresh):
 
 
 def oks_iou(g, d, a_g, a_d, sigmas=None, in_vis_thre=None):
+    """
+    # g 是点
+    # a_g 是面积
+
+    """
     if not isinstance(sigmas, np.ndarray):
-        sigmas = np.array([.26, .25, .25, .35, .35, .79, .79, .72, .72, .62, .62, 1.07, 1.07, .87, .87, .89, .89]) / 10.0
+        sigmas = np.array([.26, .25, .25, .35, .35, .79, .79, .72, .72, .62, .62, 1.07, 1.07, .87, .87, .89, .89, .26, .25, .25, .35, .35, .79, .79, .72, .72, .62, .62, 1.07, 1.07, .87, .87, .89, .89]) / 10.0
     vars = (sigmas * 2) ** 2
     xg = g[0::3]
     yg = g[1::3]
@@ -104,7 +109,7 @@ def oks_nms(kpts_db, thresh, sigmas=None, in_vis_thre=None):
     """
     if len(kpts_db) == 0:
         return []
-
+    import ipdb;ipdb.set_trace()
     scores = np.array([kpts_db[i]['score'] for i in range(len(kpts_db))])
     kpts = np.array([kpts_db[i]['keypoints'].flatten() for i in range(len(kpts_db))])
     areas = np.array([kpts_db[i]['area'] for i in range(len(kpts_db))])
@@ -115,7 +120,7 @@ def oks_nms(kpts_db, thresh, sigmas=None, in_vis_thre=None):
     while order.size > 0:
         i = order[0]
         keep.append(i)
-
+        # g, d, a_g, a_d, sigmas=None, in_vis_thre=None
         oks_ovr = oks_iou(kpts[i], kpts[order[1:]], areas[i], areas[order[1:]], sigmas, in_vis_thre)
 
         inds = np.where(oks_ovr <= thresh)[0]

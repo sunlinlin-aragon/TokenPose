@@ -25,8 +25,8 @@ class JointsMSELoss(nn.Module):
         loss = 0
 
         for idx in range(num_joints):
-            heatmap_pred = heatmaps_pred[idx].squeeze()
-            heatmap_gt = heatmaps_gt[idx].squeeze()
+            heatmap_pred = heatmaps_pred[idx].squeeze().cuda()
+            heatmap_gt = heatmaps_gt[idx].squeeze().cuda()
             if self.use_target_weight:
                 loss += 0.5 * self.criterion(
                     heatmap_pred.mul(target_weight[:, idx]),
@@ -65,8 +65,8 @@ class JointsOHKMMSELoss(nn.Module):
 
         loss = []
         for idx in range(num_joints):
-            heatmap_pred = heatmaps_pred[idx].squeeze()
-            heatmap_gt = heatmaps_gt[idx].squeeze()
+            heatmap_pred = heatmaps_pred[idx].squeeze().cuda()
+            heatmap_gt = heatmaps_gt[idx].squeeze().cuda()
             if self.use_target_weight:
                 loss.append(0.5 * self.criterion(
                     heatmap_pred.mul(target_weight[:, idx]),

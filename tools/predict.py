@@ -27,9 +27,18 @@ from config import update_config
 from core.loss import JointsMSELoss
 from core.function import validate
 from utils.utils import create_logger
-
-import dataset
+from tifffile import tifffile
+import random
+from PIL import Image
+import copy
+import cv2
+import numpy as np
+from core.inference import get_final_preds
+from utils.utils import show_point
 import models
+from utils.transforms import flip_back
+from utils.transforms import get_affine_transform
+from utils.transforms import affine_transform
 
 
 def parse_args():
@@ -92,58 +101,75 @@ def main():
         cfg, is_train=False
     )
 
-    # model.load_state_dict(torch.load(os.path.join('../output/coco/pose_resnet/res50_256x192_d256x3_adam_lr1e-3','model_best.pth')), strict=False)
-    if cfg.TEST.MODEL_FILE:
-        logger.info('=> loading model from {}'.format(cfg.TEST.MODEL_FILE))
-
-        # for unseen test
-        pretrained_state_dict = torch.load(cfg.TEST.MODEL_FILE)
-        existing_state_dict = {}
-        for name, m in pretrained_state_dict.items():
-            if True:
-                existing_state_dict[name] = m
-                print("load layer param:{}".format(name))
-        model.load_state_dict(existing_state_dict, strict=False)   
-
-        # # # for normal test
-        # model.load_state_dict(torch.load(cfg.TEST.MODEL_FILE), strict=False)
-    else:
-        model_state_file = os.path.join(
-            final_output_dir, 'checkpoint.pth'
-        )
-        logger.info('=> loading model from {}'.format(model_state_file))
-        model.load_state_dict(torch.load(model_state_file)['state_dict'])
-
-    # model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
+    model_state_file = os.path.join(
+        final_output_dir, 'checkpoint.pth'
+    )
+    logger.info('=> loading model from {}'.format(model_state_file))
+    model.load_state_dict(torch.load(model_state_file)['state_dict'])
     model.cuda()
 
-    # define loss function (criterion) and optimizer
-    criterion = JointsMSELoss(
-        use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT
-    ).cuda()
 
     # Data loading code
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
     )
-    valid_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
-        cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, False,
-        transforms.Compose([
+
+    transform = transforms.Compose([
             transforms.ToTensor(),
             normalize,
         ])
-    )
-    valid_loader = torch.utils.data.DataLoader(
-        valid_dataset,
-        batch_size=cfg.TEST.BATCH_SIZE_PER_GPU*len(cfg.GPUS),
-        shuffle=False,
-        num_workers=cfg.WORKERS,
-        pin_memory=True
-    )
 
-    # evaluate on validation set
-    validate(cfg, valid_loader, valid_dataset, model, criterion,
-             final_output_dir, tb_log_dir)
+    file_path = '/home/workspace/data/CIHP_body_front_point/val_img/7a7a06fbb9e44a62b3dad4d397349ec7.tif'
+    data_numpy = tifffile.imread(file_path)
+    data_numpy = np.expand_dims(data_numpy, axis=2)
+    data_numpy = np.concatenate((data_numpy, data_numpy, data_numpy), axis=-1)
+    data_numpy = cv2.cvtColor(data_numpy, cv2.COLOR_BGR2RGB)
+    c = np.array([139.5, 194.5], dtype=np.float32)
+    s = np.array([1.546875, 2.0625], dtype=np.float32)
+    r = 0
+    image_size = np.array([288, 384])
+    print(c, s, r, image_size)
+    trans = get_affine_transform(c, s, r, image_size)
+    input = cv2.warpAffine(data_numpy, trans, (int(image_size[0]), int(image_size[1])), flags=cv2.INTER_LINEAR)
+    input = transform(input).unsqueeze(0)
+    print(input.shape)
+    with torch.no_grad():
+        outputs = model(input.cuda())
+        if isinstance(outputs, list):
+            output = outputs[-1]
+        else:
+            output = outputs
+        # this part is ugly, because pytorch has not supported negative index
+        # input_flipped = model(input[:, :, :, ::-1])
+        # input_flipped = np.flip(input.cpu().numpy(), 3).copy()
+        # input_flipped = torch.from_numpy(input_flipped).cuda()
+        # outputs_flipped = model(input_flipped)
+
+        # if isinstance(outputs_flipped, list):
+        #     output_flipped = outputs_flipped[-1]
+        # else:
+        #     output_flipped = outputs_flipped
+
+        # flip_pairs = [[1, 2], [3, 4], [5, 6], [7, 8],
+        #             [11, 12], [13, 14], [18, 19],
+        #             [20, 21], [22, 23], [24, 25],
+        #             [26, 27], [28, 29], [30, 31],
+        #             [32, 33]
+        #         ]
+        # output_flipped = flip_back(output_flipped.cpu().numpy(), flip_pairs)
+        # output_flipped = torch.from_numpy(output_flipped.copy()).cuda()
+
+        # output = (output + output_flipped) * 0.5
+
+        c = np.array([[139.5, 194.5]], dtype=np.float32)
+        s = np.array([[1.546875, 2.0625]], dtype=np.float32)
+
+        preds, maxvals = get_final_preds(cfg, output.clone().cpu().numpy(), c, s)
+
+        image = tifffile.imread(file_path)
+        img = copy.copy(image) * 5
+        img = show_point(img, preds[0], (0, 0, 255))   # 识别
+        Image.fromarray(np.uint8(img)).save('test.png')
 
 
 if __name__ == '__main__':

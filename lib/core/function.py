@@ -21,6 +21,13 @@ from core.evaluate import accuracy
 from core.inference import get_final_preds
 from utils.transforms import flip_back
 from utils.vis import save_debug_images
+from tifffile import tifffile
+import random
+from PIL import Image
+import copy
+import cv2
+from utils.utils import show_point
+from core.inference import get_max_preds
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +49,7 @@ def train(config, train_loader, model, criterion, optimizer, epoch,
         data_time.update(time.time() - end)
 
         # compute output
-        outputs = model(input)
+        outputs = model(input.cuda())
 
         target = target.cuda(non_blocking=True)
         target_weight = target_weight.cuda(non_blocking=True)
@@ -117,9 +124,10 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
     idx = 0
     with torch.no_grad():
         end = time.time()
+        data_result = {}
         for i, (input, target, target_weight, meta) in enumerate(val_loader):
             # compute output
-            outputs = model(input)
+            outputs = model(input.cuda())
             if isinstance(outputs, list):
                 output = outputs[-1]
             else:
@@ -159,13 +167,24 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-
             c = meta['center'].numpy()
             s = meta['scale'].numpy()
             score = meta['score'].numpy()
 
             preds, maxvals = get_final_preds(
                 config, output.clone().cpu().numpy(), c, s)
+
+            image = tifffile.imread(meta["image"][0])
+
+            img = copy.copy(image) * 5
+            label_point = meta['joints'].numpy()[0][:,0:2]
+            img = show_point(img, label_point, (255, 255, 0))  # 标注
+            img = show_point(img, preds[0], (0, 0, 255))   # 识别
+            # import ipdb;ipdb.set_trace()
+            # cv2.rectangle(img, (xmin[i],ymin[i]), (xmax[i],ymax[i]), (0,255,0), 4)
+
+            Image.fromarray(np.uint8(img)).save('test%s.png' % i)
+            data_result[meta["image"][0]] = np.array(preds[0]).tolist()
 
             all_preds[idx:idx + num_images, :, 0:2] = preds[:, :, 0:2]
             all_preds[idx:idx + num_images, :, 2:3] = maxvals
@@ -192,7 +211,10 @@ def validate(config, val_loader, val_dataset, model, criterion, output_dir,
                 )
                 save_debug_images(config, input, meta, target, pred*4, output,
                                   prefix)
+        import  pandas as pd
 
+        df = pd.DataFrame.from_dict(data_result)
+        df.to_csv('TokenPost.csv')
         name_values, perf_indicator = val_dataset.evaluate(
             config, all_preds, output_dir, all_boxes, image_path,
             filenames, imgnums

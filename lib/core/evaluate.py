@@ -20,6 +20,7 @@ def calc_dists(preds, target, normalize):
     for n in range(preds.shape[0]):
         for c in range(preds.shape[1]):
             if target[n, c, 0] > 1 and target[n, c, 1] > 1:
+                import ipdb;ipdb.set_trace()
                 normed_preds = preds[n, c, :] / normalize[n]
                 normed_targets = target[n, c, :] / normalize[n]
                 dists[c, n] = np.linalg.norm(normed_preds - normed_targets)
@@ -48,11 +49,11 @@ def accuracy(output, target, hm_type='gaussian', thr=0.5):
     idx = list(range(output.shape[1]))
     norm = 1.0
     if hm_type == 'gaussian':
-        pred, _ = get_max_preds(output)
-        target, _ = get_max_preds(target)
+        pred, _ = get_max_preds(output) # (1, 34, 2)
+        target, _ = get_max_preds(target) # (1, 34, 2)
         h = output.shape[2]
         w = output.shape[3]
-        norm = np.ones((pred.shape[0], 2)) * np.array([h, w]) / 10
+        norm = np.ones((pred.shape[0], 2)) * np.array([h, w]) / 10  # array([[9.6, 7.2]])
     dists = calc_dists(pred, target, norm)
 
     acc = np.zeros((len(idx) + 1))
