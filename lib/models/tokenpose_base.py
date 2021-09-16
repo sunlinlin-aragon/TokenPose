@@ -562,33 +562,44 @@ class TokenPose_L_base(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def forward(self, feature, mask = None):
-        p = self.patch_size
+        import ipdb;ipdb.set_trace()
+
+        # feature torch.Size([1, 48, 96, 72])
+
+        p = self.patch_size  # [6, 4]
         # transformer
+        # 更改输入的尺寸
+        # x torch.Size([1, 288, 1152])
         x = rearrange(feature, 'b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = p[0], p2 = p[1])
-        x = self.patch_to_embedding(x)
+        # 输入转化为embedding
+        x = self.patch_to_embedding(x)  # torch.Size([1, 288, 192])
 
         b, n, _ = x.shape
-
-        keypoint_tokens = repeat(self.keypoint_token, '() n d -> b n d', b = b)
+        # 点的参数
+        # self.keypoint_token torch.Size([1, 34, 192])
+        keypoint_tokens = repeat(self.keypoint_token, '() n d -> b n d', b = b)  # torch.Size([1, 34, 192])
+        # "sine-full"
         if self.pos_embedding_type in ["sine","sine-full"] :
-            x += self.pos_embedding[:, :n]
-            x = torch.cat((keypoint_tokens, x), dim=1)
+            # 增加位置参数
+            x += self.pos_embedding[:, :n]   # torch.Size([1, 288, 192])
+            # 链接点的参数
+            x = torch.cat((keypoint_tokens, x), dim=1)   # 链接识别关键点参数
         else:
             x = torch.cat((keypoint_tokens, x), dim=1)
             x += self.pos_embedding[:, :(n + self.num_keypoints)]
         x = self.dropout(x)
 
-        x1 = self.transformer1(x, mask,self.pos_embedding)
-        x2 = self.transformer2(x1, mask,self.pos_embedding)
-        x3 = self.transformer3(x2, mask,self.pos_embedding)
+        x1 = self.transformer1(x, mask,self.pos_embedding)  # torch.Size([1, 322, 192])
+        x2 = self.transformer2(x1, mask,self.pos_embedding) # torch.Size([1, 322, 192])
+        x3 = self.transformer3(x2, mask,self.pos_embedding) # torch.Size([1, 322, 192])
 
-        x1_out = self.to_keypoint_token(x1[:, 0:self.num_keypoints])
-        x2_out = self.to_keypoint_token(x2[:, 0:self.num_keypoints])
-        x3_out = self.to_keypoint_token(x3[:, 0:self.num_keypoints])
+        x1_out = self.to_keypoint_token(x1[:, 0:self.num_keypoints]) # torch.Size([1, 34, 192])
+        x2_out = self.to_keypoint_token(x2[:, 0:self.num_keypoints]) # torch.Size([1, 34, 192])
+        x3_out = self.to_keypoint_token(x3[:, 0:self.num_keypoints]) # torch.Size([1, 34, 192])
+        # transform 类似残差链接
+        x = torch.cat((x1_out, x2_out, x3_out), dim=2) # torch.Size([1, 34, 576])
 
-        x = torch.cat((x1_out, x2_out, x3_out), dim=2)
-
-        x = self.mlp_head(x)
+        x = self.mlp_head(x) # torch.Size([1, 34, 6912])
         x = rearrange(x,'b c (p1 p2) -> b c p1 p2',p1=self.heatmap_size[0],p2=self.heatmap_size[1])
 
         return x
